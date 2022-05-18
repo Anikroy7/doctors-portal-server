@@ -4,7 +4,7 @@ const app = express()
 require('dotenv').config()
 const cors = require('cors');
 var jwt = require('jsonwebtoken');
-const { response } = require('express');
+const res = require('express/lib/response');
 const port = process.env.PORT || 5000
 
 // middleware 
@@ -19,6 +19,24 @@ app.use(express.json())
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kzuhl.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 console.log(uri);
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
+function verifyJwt(req, res, next) {
+
+    const auth = req.headers.authorization;
+    console.log('from jwy', auth);
+    if (!auth) {
+        return res.status(401).send({ message: 'Unauthorized accsess' });
+    }
+    const accsessToken = auth.split(' ')[1]
+    console.log(accsessToken);
+    jwt.verify(accsessToken, process.env.SECRET_ACCSESS_TOKEN, function (err, decoded) {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden accsess' })
+        }
+        req.decoded = decoded;
+        next()
+    });
+
+}
 
 async function run() {
     try {
@@ -53,11 +71,19 @@ async function run() {
             res.send(services)
         })
 
-        app.get('/booking', async (req, res) => {
+        app.get('/booking', verifyJwt, async (req, res) => {
+            console.log('docoded form booking', req.decoded);
+            const decodedEmail = req.decoded.email;
             const patient = req.query.patient;
-            const query = { patient }
-            const bookings = await bookingCollection.find(query).toArray();
-            res.send(bookings)
+            if (decodedEmail === patient) {
+                const query = { patient }
+                const bookings = await bookingCollection.find(query).toArray();
+                res.send(bookings)
+            }
+            else {
+                return res.status(403).send({ message: 'Forbidden accsess' })
+            }
+
         })
 
 
@@ -72,7 +98,7 @@ async function run() {
             }
             const result = await userCollection.updateOne(filter, updateDoc, options)
             const token = jwt.sign({ email: email }, process.env.SECRET_ACCSESS_TOKEN, {
-                expiresIn: '1h'
+                expiresIn: '1d'
             })
             res.send({ result, token })
 
@@ -82,7 +108,7 @@ async function run() {
             const booking = req.body;
             console.log(booking.treatement);
             const query = { treatement: booking.treatement, date: booking.date, patient: booking.patient }
-            console.log(query);
+            cv
             const exists = await bookingCollection.findOne(query);
             if (exists) {
                 return res.send({ success: false, booking: exists })
@@ -93,6 +119,14 @@ async function run() {
             }
 
         })
+
+
+        app.get('/users', verifyJwt, async (req, res) => {
+            const query = {};
+            const result = await userCollection.find(query).toArray();
+            res.send(result)
+        })
+
     }
     finally {
         // await client.close();
