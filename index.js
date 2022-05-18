@@ -17,17 +17,17 @@ app.use(express.json())
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kzuhl.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
-console.log(uri);
+
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 function verifyJwt(req, res, next) {
 
     const auth = req.headers.authorization;
-    console.log('from jwy', auth);
+    ;
     if (!auth) {
         return res.status(401).send({ message: 'Unauthorized accsess' });
     }
     const accsessToken = auth.split(' ')[1]
-    console.log(accsessToken);
+
     jwt.verify(accsessToken, process.env.SECRET_ACCSESS_TOKEN, function (err, decoded) {
         if (err) {
             return res.status(403).send({ message: 'Forbidden accsess' })
@@ -72,7 +72,7 @@ async function run() {
         })
 
         app.get('/booking', verifyJwt, async (req, res) => {
-            console.log('docoded form booking', req.decoded);
+
             const decodedEmail = req.decoded.email;
             const patient = req.query.patient;
             if (decodedEmail === patient) {
@@ -84,6 +84,33 @@ async function run() {
                 return res.status(403).send({ message: 'Forbidden accsess' })
             }
 
+        })
+
+        app.get('/admin/:email', async (req, res) => {
+            const email = req.params.email;
+            const user = await userCollection.findOne({ email: email })
+            console.log(user);
+            const isAdmin = user.role === 'admin';
+
+            res.send({ admin: isAdmin })
+        })
+
+        app.put('/user/admin/:email', verifyJwt, async (req, res) => {
+            const email = req.params.email;
+            const requester = req.decoded.email;
+            const requesterAccount = await userCollection.findOne({ email: requester })
+            if (requesterAccount.role === 'admin') {
+
+                const filter = { email: email }
+                const updateDoc = {
+                    $set: { role: 'admin' }
+                }
+                const result = await userCollection.updateOne(filter, updateDoc)
+                res.send(result)
+            }
+            else {
+                res.status(403).send('Forbidden access')
+            }
         })
 
 
@@ -106,7 +133,7 @@ async function run() {
 
         app.post('/booking', async (req, res) => {
             const booking = req.body;
-            console.log(booking.treatement);
+
             const query = { treatement: booking.treatement, date: booking.date, patient: booking.patient }
             cv
             const exists = await bookingCollection.findOne(query);
