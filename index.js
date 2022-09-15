@@ -4,6 +4,8 @@ const nodemailer = require('nodemailer');
 const sgTransport = require('nodemailer-sendgrid-transport');
 const app = express()
 require('dotenv').config()
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const cors = require('cors');
 var jwt = require('jsonwebtoken');
 const res = require('express/lib/response');
@@ -24,7 +26,7 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 function verifyJwt(req, res, next) {
 
     const auth = req.headers.authorization;
-    ;
+
     if (!auth) {
         return res.status(401).send({ message: 'Unauthorized accsess' });
     }
@@ -104,6 +106,22 @@ async function run() {
             res.send(result)
         })
 
+        app.post('/create-payment-intent', verifyJwt, async (req, res) => {
+
+            const { price } = req.body;
+
+            const amount = price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                automatic_payment_methods: ["card"]
+            });
+            console.log('paymentIntent', paymentIntent);
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        })
+
         app.get('/available', async (req, res) => {
             const date = req.query.date || 'May 20, 2022'
 
@@ -141,7 +159,6 @@ async function run() {
 
         app.get('/booking/:id', verifyJwt, async (req, res) => {
             const id = req.params.id;
-
             const query = { _id: ObjectId(id) };
             const bookings = await bookingCollection.findOne(query);
             res.send(bookings);
@@ -150,7 +167,6 @@ async function run() {
         app.get('/admin/:email', async (req, res) => {
             const email = req.params.email;
             const user = await userCollection.findOne({ email: email })
-
             const isAdmin = user.role === 'admin';
             res.send({ admin: isAdmin })
         })
